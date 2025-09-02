@@ -53,7 +53,6 @@ ContentFrame.Parent = MainFrame
 
 -- Create Tabs
 for i, tabName in ipairs(Tabs) do
-    -- Tab Button
     local TabButton = Instance.new("TextButton")
     TabButton.Name = tabName .. "TabButton"
     TabButton.Size = UDim2.new(0, 120, 0, 40)
@@ -66,7 +65,6 @@ for i, tabName in ipairs(Tabs) do
     TabButton.TextSize = 14
     TabButton.Parent = TabButtonsFrame
     
-    -- Tab Frame
     local TabFrame = Instance.new("Frame")
     TabFrame.Name = tabName .. "TabFrame"
     TabFrame.Size = UDim2.new(0, 480, 0, 400)
@@ -87,7 +85,6 @@ for i, tabName in ipairs(Tabs) do
     end)
 end
 
--- Show Main tab by default
 TabFrames["Main"].Visible = true
 
 -- Open/Close Button
@@ -103,9 +100,7 @@ ToggleButton.Font = Enum.Font.GothamBold
 ToggleButton.TextSize = 14
 ToggleButton.Parent = ScreenGui
 
--- Menu State
 local MenuOpen = true
-
 ToggleButton.MouseButton1Click:Connect(function()
     MenuOpen = not MenuOpen
     MainFrame.Visible = MenuOpen
@@ -121,13 +116,11 @@ local ESP = {
     Distance = {}
 }
 
--- ESP Functions
 function ESP:CreateESP(Player)
     local Character = Player.Character or Player.CharacterAdded:Wait()
     local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
     local Head = Character:WaitForChild("Head")
     
-    -- Box
     local Box = Drawing.new("Square")
     Box.Visible = false
     Box.Color = Color3.fromRGB(0, 255, 0)
@@ -135,14 +128,12 @@ function ESP:CreateESP(Player)
     Box.Filled = false
     self.Boxes[Player] = Box
     
-    -- Tracer
     local Tracer = Drawing.new("Line")
     Tracer.Visible = false
     Tracer.Color = Color3.fromRGB(255, 0, 0)
     Tracer.Thickness = 1
     self.Tracers[Player] = Tracer
     
-    -- Name
     local Name = Drawing.new("Text")
     Name.Visible = false
     Name.Color = Color3.fromRGB(255, 255, 255)
@@ -152,7 +143,6 @@ function ESP:CreateESP(Player)
     Name.Text = Player.Name
     self.Names[Player] = Name
     
-    -- Distance
     local Distance = Drawing.new("Text")
     Distance.Visible = false
     Distance.Color = Color3.fromRGB(200, 200, 200)
@@ -163,7 +153,10 @@ function ESP:CreateESP(Player)
 end
 
 function ESP:UpdateESP(Player)
-    if not self.Enabled then return end
+    if not self.Enabled then 
+        self:HideESP(Player)
+        return 
+    end
     
     local Character = Player.Character
     if not Character then return end
@@ -175,7 +168,6 @@ function ESP:UpdateESP(Player)
     local Position, OnScreen = workspace.CurrentCamera:WorldToViewportPoint(HumanoidRootPart.Position)
     
     if OnScreen then
-        -- Update Box
         local Box = self.Boxes[Player]
         if Box then
             local Size = (workspace.CurrentCamera:WorldToViewportPoint(HumanoidRootPart.Position - Vector3.new(0, 3, 0)).Y - workspace.CurrentCamera:WorldToViewportPoint(HumanoidRootPart.Position + Vector3.new(0, 2.5, 0)).Y) / 2
@@ -184,7 +176,6 @@ function ESP:UpdateESP(Player)
             Box.Visible = true
         end
         
-        -- Update Tracer
         local Tracer = self.Tracers[Player]
         if Tracer then
             Tracer.From = Vector2.new(workspace.CurrentCamera.ViewportSize.X / 2, workspace.CurrentCamera.ViewportSize.Y)
@@ -192,7 +183,6 @@ function ESP:UpdateESP(Player)
             Tracer.Visible = true
         end
         
-        -- Update Name and Distance
         local Name = self.Names[Player]
         local DistanceText = self.Distance[Player]
         if Name and DistanceText then
@@ -216,20 +206,39 @@ function ESP:HideESP(Player)
     if self.Distance[Player] then self.Distance[Player].Visible = false end
 end
 
+function ESP:ClearESP()
+    for Player, Drawing in pairs(self.Boxes) do
+        Drawing:Remove()
+    end
+    for Player, Drawing in pairs(self.Tracers) do
+        Drawing:Remove()
+    end
+    for Player, Drawing in pairs(self.Names) do
+        Drawing:Remove()
+    end
+    for Player, Drawing in pairs(self.Distance) do
+        Drawing:Remove()
+    end
+    self.Boxes = {}
+    self.Tracers = {}
+    self.Names = {}
+    self.Distance = {}
+end
+
 function ESP:ToggleESP(State)
     self.Enabled = State
-    for Player, Box in pairs(self.Boxes) do
-        if State then
-            if Player.Character and Player ~= LocalPlayer then
-                Box.Visible = true
+    if not State then
+        self:ClearESP()
+    else
+        for _, Player in ipairs(Players:GetPlayers()) do
+            if Player ~= LocalPlayer then
+                self:CreateESP(Player)
             end
-        else
-            Box.Visible = false
         end
     end
 end
 
--- ESP Toggle in Visual Tab
+-- ESP Toggle
 local ESPToggle = Instance.new("TextButton")
 ESPToggle.Name = "ESPToggle"
 ESPToggle.Size = UDim2.new(0, 200, 0, 30)
@@ -247,56 +256,305 @@ ESPToggle.MouseButton1Click:Connect(function()
     ESPToggle.Text = "ESP: " .. (ESP.Enabled and "On" or "Off")
 end)
 
--- Player Added/Removed Connections
-Players.PlayerAdded:Connect(function(Player)
-    ESP:CreateESP(Player)
-end)
+-- AimBot Setup
+local AimBot = {
+    Enabled = false,
+    FOVCircle = Drawing.new("Circle"),
+    TargetPart = "Head",
+    FOVRadius = 80,
+    FOVColor = Color3.fromRGB(255, 255, 255),
+    Smoothing = 1
+}
 
-Players.PlayerRemoving:Connect(function(Player)
-    if ESP.Boxes[Player] then ESP.Boxes[Player]:Remove() end
-    if ESP.Tracers[Player] then ESP.Tracers[Player]:Remove() end
-    if ESP.Names[Player] then ESP.Names[Player]:Remove() end
-    if ESP.Distance[Player] then ESP.Distance[Player]:Remove() end
+AimBot.FOVCircle.Visible = false
+AimBot.FOVCircle.Radius = AimBot.FOVRadius
+AimBot.FOVCircle.Color = AimBot.FOVColor
+AimBot.FOVCircle.Thickness = 2
+AimBot.FOVCircle.Filled = false
+AimBot.FOVCircle.Position = Vector2.new(workspace.CurrentCamera.ViewportSize.X / 2, workspace.CurrentCamera.ViewportSize.Y / 2)
+
+-- AimBot Functions
+function AimBot:GetClosestPlayer()
+    local ClosestPlayer = nil
+    local ShortestDistance = math.huge
     
-    ESP.Boxes[Player] = nil
-    ESP.Tracers[Player] = nil
-    ESP.Names[Player] = nil
-    ESP.Distance[Player] = nil
-end)
-
--- Initialize ESP for existing players
-for _, Player in ipairs(Players:GetPlayers()) do
-    if Player ~= LocalPlayer then
-        ESP:CreateESP(Player)
+    for _, Player in ipairs(Players:GetPlayers()) do
+        if Player ~= LocalPlayer and Player.Character then
+            local Character = Player.Character
+            local HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+            local TargetPart = Character:FindFirstChild(self.TargetPart)
+            
+            if HumanoidRootPart and TargetPart then
+                local Position, OnScreen = workspace.CurrentCamera:WorldToViewportPoint(TargetPart.Position)
+                local MousePosition = Vector2.new(UserInputService:GetMouseLocation().X, UserInputService:GetMouseLocation().Y)
+                local Center = Vector2.new(workspace.CurrentCamera.ViewportSize.X / 2, workspace.CurrentCamera.ViewportSize.Y / 2)
+                local Distance = (MousePosition - Center).Magnitude
+                
+                if OnScreen and Distance < self.FOVRadius and Distance < ShortestDistance then
+                    ShortestDistance = Distance
+                    ClosestPlayer = Player
+                end
+            end
+        end
     end
+    
+    return ClosestPlayer
 end
 
--- ESP Update Loop
-RunService.RenderStepped:Connect(function()
-    for Player, Box in pairs(ESP.Boxes) do
-        if Player ~= LocalPlayer and Player.Character then
-            ESP:UpdateESP(Player)
-        else
-            ESP:HideESP(Player)
+function AimBot:AimAtTarget()
+    if not self.Enabled then return end
+    
+    local TargetPlayer = self:GetClosestPlayer()
+    if not TargetPlayer or not TargetPlayer.Character then return end
+    
+    local TargetPart = TargetPlayer.Character:FindFirstChild(self.TargetPart)
+    if not TargetPart then return end
+    
+    local TargetPosition = workspace.CurrentCamera:WorldToViewportPoint(TargetPart.Position)
+    local CurrentPosition = Vector2.new(UserInputService:GetMouseLocation().X, UserInputService:GetMouseLocation().Y)
+    local Delta = Vector2.new(TargetPosition.X, TargetPosition.Y) - CurrentPosition
+    
+    mousemoverel(Delta.X / self.Smoothing, Delta.Y / self.Smoothing)
+end
+
+-- AimBot Toggle
+local AimBotToggle = Instance.new("TextButton")
+AimBotToggle.Name = "AimBotToggle"
+AimBotToggle.Size = UDim2.new(0, 200, 0, 30)
+AimBotToggle.Position = UDim2.new(0, 20, 0, 60)
+AimBotToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+AimBotToggle.BorderSizePixel = 0
+AimBotToggle.Text = "AimBot: Off"
+AimBotToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+AimBotToggle.Font = Enum.Font.Gotham
+AimBotToggle.TextSize = 14
+AimBotToggle.Parent = TabFrames["Main"]
+
+AimBotToggle.MouseButton1Click:Connect(function()
+    AimBot.Enabled = not AimBot.Enabled
+    AimBot.FOVCircle.Visible = AimBot.Enabled
+    AimBotToggle.Text = "AimBot: " .. (AimBot.Enabled and "On" or "Off")
+end)
+
+-- FOV Radius Slider
+local FOVSlider = Instance.new("TextLabel")
+FOVSlider.Name = "FOVSlider"
+FOVSlider.Size = UDim2.new(0, 200, 0, 20)
+FOVSlider.Position = UDim2.new(0, 20, 0, 100)
+FOVSlider.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+FOVSlider.BorderSizePixel = 0
+FOVSlider.Text = "FOV Radius: " .. AimBot.FOVRadius
+FOVSlider.TextColor3 = Color3.fromRGB(255, 255, 255)
+FOVSlider.Font = Enum.Font.Gotham
+FOVSlider.TextSize = 12
+FOVSlider.Parent = TabFrames["Main"]
+
+local FOVValue = Instance.new("TextButton")
+FOVValue.Name = "FOVValue"
+FOVValue.Size = UDim2.new(0, 180, 0, 20)
+FOVValue.Position = UDim2.new(0, 10, 0, 120)
+FOVValue.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+FOVValue.BorderSizePixel = 0
+FOVValue.Text = tostring(AimBot.FOVRadius)
+FOVValue.TextColor3 = Color3.fromRGB(255, 255, 255)
+FOVValue.Font = Enum.Font.Gotham
+FOVValue.TextSize = 12
+FOVValue.Parent = TabFrames["Main"]
+
+FOVValue.MouseButton1Click:Connect(function()
+    AimBot.FOVRadius = AimBot.FOVRadius + 10
+    if AimBot.FOVRadius > 200 then
+        AimBot.FOVRadius = 50
+    end
+    AimBot.FOVCircle.Radius = AimBot.FOVRadius
+    FOVSlider.Text = "FOV Radius: " .. AimBot.FOVRadius
+    FOVValue.Text = tostring(AimBot.FOVRadius)
+end)
+
+-- Target Part Selection
+local TargetPartButton = Instance.new("TextButton")
+TargetPartButton.Name = "TargetPartButton"
+TargetPartButton.Size = UDim2.new(0, 200, 0, 30)
+TargetPartButton.Position = UDim2.new(0, 20, 0, 150)
+TargetPartButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+TargetPartButton.BorderSizePixel = 0
+TargetPartButton.Text = "Target: Head"
+TargetPartButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+TargetPartButton.Font = Enum.Font.Gotham
+TargetPartButton.TextSize = 14
+TargetPartButton.Parent = TabFrames["Main"]
+
+TargetPartButton.MouseButton1Click:Connect(function()
+    if AimBot.TargetPart == "Head" then
+        AimBot.TargetPart = "HumanoidRootPart"
+        TargetPartButton.Text = "Target: Body"
+    else
+        AimBot.TargetPart = "Head"
+        TargetPartButton.Text = "Target: Head"
+    end
+end)
+
+-- Anti-Aim (SpinBot)
+local AntiAim = {
+    Enabled = false,
+    Speed = 5
+}
+
+local SpinBotToggle = Instance.new("TextButton")
+SpinBotToggle.Name = "SpinBotToggle"
+SpinBotToggle.Size = UDim2.new(0, 200, 0, 30)
+SpinBotToggle.Position = UDim2.new(0, 20, 0, 20)
+SpinBotToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+SpinBotToggle.BorderSizePixel = 0
+SpinBotToggle.Text = "SpinBot: Off"
+SpinBotToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpinBotToggle.Font = Enum.Font.Gotham
+SpinBotToggle.TextSize = 14
+SpinBotToggle.Parent = TabFrames["Player"]
+
+SpinBotToggle.MouseButton1Click:Connect(function()
+    AntiAim.Enabled = not AntiAim.Enabled
+    SpinBotToggle.Text = "SpinBot: " .. (AntiAim.Enabled and "On" or "Off")
+end)
+
+-- Speed Hack
+local SpeedHack = {
+    Enabled = false,
+    Speed = 16
+}
+
+local SpeedHackToggle = Instance.new("TextButton")
+SpeedHackToggle.Name = "SpeedHackToggle"
+SpeedHackToggle.Size = UDim2.new(0, 200, 0, 30)
+SpeedHackToggle.Position = UDim2.new(0, 20, 0, 60)
+SpeedHackToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+SpeedHackToggle.BorderSizePixel = 0
+SpeedHackToggle.Text = "Speed Hack: Off"
+SpeedHackToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpeedHackToggle.Font = Enum.Font.Gotham
+SpeedHackToggle.TextSize = 14
+SpeedHackToggle.Parent = TabFrames["Player"]
+
+SpeedHackToggle.MouseButton1Click:Connect(function()
+    SpeedHack.Enabled = not SpeedHack.Enabled
+    SpeedHackToggle.Text = "Speed Hack: " .. (SpeedHack.Enabled and "On" or "Off")
+    
+    if SpeedHack.Enabled and LocalPlayer.Character then
+        local Humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+        if Humanoid then
+            Humanoid.WalkSpeed = SpeedHack.Speed
+        end
+    else
+        local Humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+        if Humanoid then
+            Humanoid.WalkSpeed = 16
         end
     end
 end)
 
--- Silent Aim Setup (Example)
-local SilentAimToggle = Instance.new("TextButton")
-SilentAimToggle.Name = "SilentAimToggle"
-SilentAimToggle.Size = UDim2.new(0, 200, 0, 30)
-SilentAimToggle.Position = UDim2.new(0, 20, 0, 20)
-SilentAimToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-SilentAimToggle.BorderSizePixel = 0
-SilentAimToggle.Text = "Silent Aim: Off"
-SilentAimToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
-SilentAimToggle.Font = Enum.Font.Gotham
-SilentAimToggle.TextSize = 14
-SilentAimToggle.Parent = TabFrames["Main"]
+-- Speed Value Selection
+local SpeedValue = Instance.new("TextButton")
+SpeedValue.Name = "SpeedValue"
+SpeedValue.Size = UDim2.new(0, 180, 0, 20)
+SpeedValue.Position = UDim2.new(0, 10, 0, 100)
+SpeedValue.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+SpeedValue.BorderSizePixel = 0
+SpeedValue.Text = tostring(SpeedHack.Speed)
+SpeedValue.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpeedValue.Font = Enum.Font.Gotham
+SpeedValue.TextSize = 12
+SpeedValue.Parent = TabFrames["Player"]
 
--- Add more features to other tabs as needed...
+SpeedValue.MouseButton1Click:Connect(function()
+    SpeedHack.Speed = SpeedHack.Speed + 10
+    if SpeedHack.Speed > 100 then
+        SpeedHack.Speed = 16
+    end
+    SpeedValue.Text = tostring(SpeedHack.Speed)
+    
+    if SpeedHack.Enabled and LocalPlayer.Character then
+        local Humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+        if Humanoid then
+            Humanoid.WalkSpeed = SpeedHack.Speed
+        end
+    end
+end)
+
+-- Rage Aim (Instant hit when target in FOV)
+local RageAim = {
+    Enabled = false
+}
+
+local RageAimToggle = Instance.new("TextButton")
+RageAimToggle.Name = "RageAimToggle"
+RageAimToggle.Size = UDim2.new(0, 200, 0, 30)
+RageAimToggle.Position = UDim2.new(0, 20, 0, 190)
+RageAimToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+RageAimToggle.BorderSizePixel = 0
+RageAimToggle.Text = "Rage Aim: Off"
+RageAimToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+RageAimToggle.Font = Enum.Font.Gotham
+RageAimToggle.TextSize = 14
+RageAimToggle.Parent = TabFrames["Main"]
+
+RageAimToggle.MouseButton1Click:Connect(function()
+    RageAim.Enabled = not RageAim.Enabled
+    RageAimToggle.Text = "Rage Aim: " .. (RageAim.Enabled and "On" or "Off")
+end)
+
+-- Connections
+Players.PlayerAdded:Connect(function(Player)
+    if ESP.Enabled then
+        ESP:CreateESP(Player)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(Player)
+    ESP:HideESP(Player)
+end)
+
+-- Main Loops
+RunService.RenderStepped:Connect(function()
+    -- ESP Update
+    if ESP.Enabled then
+        for Player, Box in pairs(ESP.Boxes) do
+            if Player ~= LocalPlayer and Player.Character then
+                ESP:UpdateESP(Player)
+            else
+                ESP:HideESP(Player)
+            end
+        end
+    end
+    
+    -- AimBot
+    if AimBot.Enabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+        AimBot:AimAtTarget()
+    end
+    
+    -- Anti-Aim
+    if AntiAim.Enabled and LocalPlayer.Character then
+        local HumanoidRootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if HumanoidRootPart then
+            HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad(AntiAim.Speed), 0)
+        end
+    end
+    
+    -- Rage Aim (Auto shoot when target in FOV)
+    if RageAim.Enabled and AimBot.Enabled then
+        local TargetPlayer = AimBot:GetClosestPlayer()
+        if TargetPlayer then
+            mouse1click()
+        end
+    end
+end)
+
+-- Initialize
+for _, Player in ipairs(Players:GetPlayers()) do
+    if Player ~= LocalPlayer and ESP.Enabled then
+        ESP:CreateESP(Player)
+    end
+end
 
 print("Onyx Hub Loaded Successfully!")
-print("Features: ESP, Silent Aim, Menu System")
+print("Features: ESP, AimBot, Rage Aim, SpinBot, Speed Hack")
 print("Press the Open/Close button to toggle menu")
